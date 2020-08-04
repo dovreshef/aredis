@@ -194,25 +194,12 @@ class ConnectionPool(object):
             await asyncio.sleep(self.idle_check_interval)
 
     def reset(self):
-        self.pid = os.getpid()
         self._created_connections = 0
         self._available_connections = []
         self._in_use_connections = set()
-        self._check_lock = threading.Lock()
-
-    def _checkpid(self):
-        if self.pid != os.getpid():
-            with self._check_lock:
-                if self.pid == os.getpid():
-                    # another thread already did the work while we waited
-                    # on the lock.
-                    return
-                self.disconnect()
-                self.reset()
 
     def get_connection(self, *args, **kwargs):
         """Gets a connection from the pool"""
-        self._checkpid()
         try:
             connection = self._available_connections.pop()
         except IndexError:
@@ -233,9 +220,6 @@ class ConnectionPool(object):
 
     def release(self, connection):
         """Releases the connection back to the pool"""
-        self._checkpid()
-        if connection.pid != self.pid:
-            return
         self._in_use_connections.remove(connection)
         # discard connection with unread response
         if connection.awaiting_response:
